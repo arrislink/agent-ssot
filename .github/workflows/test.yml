@@ -1,0 +1,23 @@
+name: Sync scripts
+
+on:
+  push:
+  pull_request:
+
+jobs:
+  unix:
+    strategy:
+      matrix:
+        os: [ubuntu-latest, macos-latest]
+    runs-on: ${{ matrix.os }}
+    steps:
+      - uses: actions/checkout@v4
+      - name: Test sync
+        run: bash tests/test-sync-agents.sh
+  windows:
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Test sync
+        shell: pwsh
+        run: ./tests/test-sync-agents.ps1

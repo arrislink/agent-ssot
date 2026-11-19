@@ -35,12 +35,20 @@ link_file() {
   local dst="$2"
   ensure_dir "$(dirname "$dst")"
 
-  if [ -f "$dst" ] && [ ! -L "$dst" ]; then
-    local bak="${dst}.bak.$(date +%Y%m%d%H%M%S)"
-    echo "[BACKUP] $dst -> $bak"
-    run_cmd mv "$dst" "$bak"
+  if [ -e "$dst" ] || [ -L "$dst" ]; then
+    if [ -L "$dst" ] && [ "$(readlink "$dst")" = "$src" ]; then
+      return
+    fi
+    if [ -f "$dst" ] && [ ! -L "$dst" ]; then
+      local bak="${dst}.bak.$(date +%Y%m%d%H%M%S)"
+      echo "[BACKUP] $dst -> $bak"
+      run_cmd mv "$dst" "$bak"
+    else
+      echo "[SKIP] Preserving existing non-project target: $dst"
+      return
+    fi
   fi
-  run_cmd ln -sfn "$src" "$dst"
+  run_cmd ln -s "$src" "$dst"
 }
 
 ensure_dir "$TARGET_SKILLS"
@@ -51,10 +59,13 @@ if [ -d "$REPO_SKILLS" ]; then
     [ -d "$skill_dir" ] || continue
     skill_name="$(basename "$skill_dir")"
     link_file_dir="$TARGET_SKILLS/$skill_name"
-    if [ -e "$link_file_dir" ] && [ ! -L "$link_file_dir" ]; then
-      echo "[SKIP-SSOT] ~/.agents/skills/$skill_name already exists as a real directory"
+    if [ -e "$link_file_dir" ] || [ -L "$link_file_dir" ]; then
+      if [ -L "$link_file_dir" ] && [ "$(readlink "$link_file_dir")" = "$skill_dir" ]; then
+        continue
+      fi
+      echo "[SKIP-SSOT] Preserving existing skill entry: $link_file_dir"
     else
-      run_cmd ln -sfn "$skill_dir" "$link_file_dir"
+      run_cmd ln -s "$skill_dir" "$link_file_dir"
     fi
   done
 fi
@@ -63,31 +74,46 @@ sync_skills_entries() {
   local target_dir="$1"
 
   if [ -L "$target_dir" ]; then
-    echo "[FIX] Replacing directory symlink with real directory: $target_dir"
-    run_cmd rm "$target_dir"
+    local target
+    target="$(readlink "$target_dir")"
+    if [ "$target" = "$TARGET_SKILLS" ]; then
+      echo "[SKIP] Preserving skills directory symlink: $target_dir"
+      return
+    fi
+    echo "[SKIP] Preserving non-project skills directory symlink: $target_dir"
+    return
   fi
   ensure_dir "$target_dir"
 
-  while IFS= read -r -d '' link; do
-    if [ ! -e "$link" ]; then
-      echo "[CLEAN] Removing dangling symlink: $link"
-      run_cmd rm "$link"
-    fi
-  done < <(find "$target_dir" -maxdepth 1 -type l -print0 2>/dev/null || true)
-
-  for src_skill in "$TARGET_SKILLS"/*; do
-    [ -e "$src_skill" ] || continue
-    local name
+  local sources=("$TARGET_SKILLS"/*)
+  if [ "$DRY_RUN" = true ]; then
+    for skill_dir in "$REPO_SKILLS"/*; do
+      [ -d "$skill_dir" ] || continue
+      sources+=("$TARGET_SKILLS/$(basename "$skill_dir")")
+    done
+  fi
+  for src_skill in "${sources[@]}"; do
+    [ -e "$src_skill" ] || [ -L "$src_skill" ] || [ "$DRY_RUN" = true ] && [ "${src_skill##*/}" != '*' ] || continue
+    local name dst expected
     name="$(basename "$src_skill")"
-    local dst="$target_dir/$name"
+    dst="$target_dir/$name"
+    expected="$src_skill"
 
-    if [ -e "$dst" ] && [ ! -L "$dst" ]; then
+    if [ -L "$dst" ]; then
+      local current
+      current="$(readlink "$dst")"
+      if [ "$current" = "$expected" ]; then
+        continue
+      fi
+      echo "[SKIP] Preserving non-project symlink: $dst"
+    elif [ -e "$dst" ]; then
       echo "[SKIP] Preserving existing native/private skill: $dst"
     else
-      run_cmd ln -sfn "$src_skill" "$dst"
+      run_cmd ln -s "$expected" "$dst"
     fi
   done
 }
+
 
 # Core CLI Agents
 link_file "$TARGET_MD" "$HOME/.codex/AGENTS.md"

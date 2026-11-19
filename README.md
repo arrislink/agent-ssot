@@ -12,7 +12,7 @@
 
 1. **Token-Disciplined Exploration (`Graph -> Paths -> Slices`):** Prioritizes symbol/call-graph queries (`codegraph` / LSP MCP) and bounded Rust CLI searches (`rg`, `fd`, `ast-grep`, `eza`, `dust`, `difft`) over unbounded legacy GNU commands (`find`, `grep`, `tree`, `du`).
 2. **Output Compression Compatibility:** Designed to pair cleanly with shell output compressors such as `rtk` by enforcing atomic, low-noise commands and structured failure inspection.
-3. **Non-Destructive Item-Level Distribution:** Preserves native directories (`~/.claude/skills`, `~/.omo/agent/skills`, `~/.omp/agent/skills`, etc.) and links shared skills individually, automatically pruning dangling symlinks and backing up existing global instruction files before linking.
+3. **Conservative Item-Level Distribution:** Preserves existing skills directories and unrelated links, including dangling links. Conflicting entries are skipped; existing instruction files are backed up before linking.
 4. **Orchestration Neutrality:** Avoids hardcoding vendor-specific tool primitives or conflicting multi-agent schedulers so host orchestrators (`OmO`, `omp`, `agy`, Claude Code, Codex CLI) retain native routing control.
 
 ---
@@ -62,7 +62,13 @@ Preview changes first with `-DryRun`, then execute:
 .\scripts\sync-agents.ps1
 ```
 
-> **Note for Windows Users:** Enable **Developer Mode** in Windows Settings (or run PowerShell as Administrator) to create live symlinks/junctions. Otherwise, the script falls back gracefully to file/folder copies.
+> **Windows:** Enable Developer Mode (or run PowerShell as Administrator) for links. When a junction cannot be created, a managed copy is refreshed on subsequent runs; files removed upstream are not automatically deleted from that copy. Existing unmarked directories and links are preserved. File-copy fallback creates a backup before each subsequent instruction-file refresh.
+
+An existing skills-directory symlink is preserved and skipped rather than migrated. Inspect `[SKIP]` messages to identify integrations that were not updated. The mappings above describe intended locations; actual discovery varies by agent and version and has not been independently verified for every product.
+
+Run the isolated regression checks with `bash tests/test-sync-agents.sh` on macOS/Linux or `pwsh -File tests/test-sync-agents.ps1` on Windows. CI runs these checks on all three platforms.
+
+Verification on 2026-11-19: `/bin/bash -n scripts/sync-agents.sh` and `/bin/bash tests/test-sync-agents.sh` passed on macOS. The PowerShell tests were not run locally because `pwsh` was unavailable; the CI workflow has been added but its results have not been verified.
 
 ---
 

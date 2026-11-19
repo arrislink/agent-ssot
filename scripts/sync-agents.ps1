@@ -1,6 +1,4 @@
-param(
-    [switch]$DryRun
-)
+param([switch]$DryRun)
 
 $ErrorActionPreference = "Stop"
 
@@ -26,68 +24,70 @@ function Ensure-Dir {
 
 function Sync-File {
     param([string]$Src, [string]$Dst)
-    if (-not (Test-Path -LiteralPath $Src)) { return }
     Ensure-Dir (Split-Path -Parent $Dst)
-
-    if ((Test-Path -LiteralPath $Dst) -and (-not ((Get-Item -LiteralPath $Dst).Attributes -band [System.IO.FileAttributes]::ReparsePoint))) {
-        $Stamp = Get-Date -Format "yyyyMMddHHmmss"
-        $Bak = "$Dst.bak.$Stamp"
-        Write-Host "[BACKUP] $Dst -> $Bak"
-        if (-not $DryRun) {
-            Move-Item -LiteralPath $Dst -Destination $Bak -Force
+    $item = Get-Item -LiteralPath $Dst -Force -ErrorAction SilentlyContinue
+    if ($item) {
+        if ($item.Attributes -band [System.IO.FileAttributes]::ReparsePoint) {
+            Write-Host "[SKIP] Preserving existing link: $Dst"
+            return
         }
+        $bak = "$Dst.bak.$(Get-Date -Format 'yyyyMMddHHmmssfff')"
+        Write-Host "[BACKUP] $Dst -> $bak"
+        if (-not $DryRun) { Move-Item -LiteralPath $Dst -Destination $bak }
     }
-
-    if ($DryRun) {
-        Write-Host "[DRY-RUN] link/copy $Src -> $Dst"
-        return
-    }
-
-    if (Test-Path -LiteralPath $Dst) {
-        Remove-Item -LiteralPath $Dst -Force -Recurse
-    }
-
+    if ($DryRun) { Write-Host "[DRY-RUN] link/copy $Src -> $Dst"; return }
     try {
+        if ($env:SYNC_AGENTS_TEST_COPY_FALLBACK -eq '1') { throw 'Copy fallback requested' }
         New-Item -ItemType SymbolicLink -Path $Dst -Target $Src -ErrorAction Stop | Out-Null
-    } catch {
-        Copy-Item -LiteralPath $Src -Destination $Dst -Force
-    }
+    } catch { Copy-Item -LiteralPath $Src -Destination $Dst }
 }
 
 function Sync-SkillFolder {
     param([string]$SrcDir, [string]$DstDir)
-    $Name = Split-Path -Leaf $SrcDir
-    $Dst = Join-Path $DstDir $Name
-
-    if ((Test-Path -LiteralPath $Dst) -and (-not ((Get-Item -LiteralPath $Dst).Attributes -band [System.IO.FileAttributes]::ReparsePoint))) {
-        Write-Host "[SKIP] Preserving existing skill directory: $Dst"
+    $name = Split-Path -Leaf $SrcDir
+    $dst = Join-Path $DstDir $name
+    $marker = Join-Path $DstDir ".$name.agent-ssot-copy"
+    $item = Get-Item -LiteralPath $dst -Force -ErrorAction SilentlyContinue
+    if ($item) {
+        if ($item.Attributes -band [System.IO.FileAttributes]::ReparsePoint) {
+            Write-Host "[SKIP] Preserving existing link: $dst"
+            return
+        }
+        if (-not (Test-Path -LiteralPath $marker) -or (Get-Content -LiteralPath $marker -Raw).Trim() -ne $SrcDir) {
+            Write-Host "[SKIP] Preserving existing skill: $dst"
+            return
+        }
+    }
+    if ($DryRun) { Write-Host "[DRY-RUN] link/copy dir $SrcDir -> $dst"; return }
+    if ($item) {
+        Copy-Item -Path (Join-Path $SrcDir '*') -Destination $dst -Recurse -Force
         return
     }
-
-    if ($DryRun) {
-        Write-Host "[DRY-RUN] link/copy dir $SrcDir -> $Dst"
-        return
-    }
-
-    if (Test-Path -LiteralPath $Dst) {
-        Remove-Item -LiteralPath $Dst -Force -Recurse
-    }
-
     try {
-        New-Item -ItemType Junction -Path $Dst -Target $SrcDir -ErrorAction Stop | Out-Null
+        if ($env:SYNC_AGENTS_TEST_COPY_FALLBACK -eq '1') { throw 'Copy fallback requested' }
+        New-Item -ItemType Junction -Path $dst -Target $SrcDir -ErrorAction Stop | Out-Null
     } catch {
-        Copy-Item -LiteralPath $SrcDir -Destination $Dst -Recurse -Force
+        Copy-Item -LiteralPath $SrcDir -Destination $dst -Recurse -Force
+        Set-Content -LiteralPath $marker -Value $SrcDir
     }
 }
 
 function Sync-TargetSkills {
     param([string]$TargetDir)
-    Ensure-Dir $TargetDir
-    if (-not (Test-Path -LiteralPath $TargetSkills)) { return }
-
-    Get-ChildItem -LiteralPath $TargetSkills -Directory | ForEach-Object {
-        Sync-SkillFolder -SrcDir $_.FullName -DstDir $TargetDir
+    $item = Get-Item -LiteralPath $TargetDir -Force -ErrorAction SilentlyContinue
+    if ($item -and ($item.Attributes -band [System.IO.FileAttributes]::ReparsePoint)) {
+        Write-Host "[SKIP] Preserving skills directory link: $TargetDir"
+        return
     }
+    Ensure-Dir $TargetDir
+    $names = @{}
+    if (Test-Path -LiteralPath $TargetSkills) {
+        Get-ChildItem -LiteralPath $TargetSkills -Directory | ForEach-Object { $names[$_.Name] = $true }
+    }
+    if ($DryRun -and (Test-Path -LiteralPath $RepoSkills)) {
+        Get-ChildItem -LiteralPath $RepoSkills -Directory | ForEach-Object { $names[$_.Name] = $true }
+    }
+    foreach ($name in $names.Keys) { Sync-SkillFolder -SrcDir (Join-Path $TargetSkills $name) -DstDir $TargetDir }
 }
 
 Ensure-Dir $TargetSkills
