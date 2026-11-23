@@ -1,4 +1,8 @@
-param([switch]$DryRun)
+param(
+    [switch]$DryRun,
+    [switch]$All,
+    [switch]$Force
+)
 
 $ErrorActionPreference = "Stop"
 
@@ -22,18 +26,35 @@ function Ensure-Dir {
     }
 }
 
+function Should-SyncTarget {
+    param([string]$CheckDir, [string]$BinName = "")
+    if ($All) { return $true }
+    if (Test-Path -LiteralPath $CheckDir) { return $true }
+    if ($BinName -and (Get-Command $BinName -ErrorAction SilentlyContinue)) { return $true }
+    return $false
+}
+
 function Sync-File {
     param([string]$Src, [string]$Dst)
     Ensure-Dir (Split-Path -Parent $Dst)
     $item = Get-Item -LiteralPath $Dst -Force -ErrorAction SilentlyContinue
     if ($item) {
         if ($item.Attributes -band [System.IO.FileAttributes]::ReparsePoint) {
-            Write-Host "[SKIP] Preserving existing link: $Dst"
-            return
+            $targets = @($item.Target)
+            if ($targets -contains $Src) {
+                return
+            }
+            if (-not $Force) {
+                Write-Host "[SKIP] Preserving existing link: $Dst"
+                return
+            }
+            Write-Host "[RELINK] $Dst -> $Src"
+            if (-not $DryRun) { Remove-Item -LiteralPath $Dst -Force }
+        } else {
+            $bak = "$Dst.bak.$(Get-Date -Format 'yyyyMMddHHmmssfff')"
+            Write-Host "[BACKUP] $Dst -> $bak"
+            if (-not $DryRun) { Move-Item -LiteralPath $Dst -Destination $bak }
         }
-        $bak = "$Dst.bak.$(Get-Date -Format 'yyyyMMddHHmmssfff')"
-        Write-Host "[BACKUP] $Dst -> $bak"
-        if (-not $DryRun) { Move-Item -LiteralPath $Dst -Destination $bak }
     }
     if ($DryRun) { Write-Host "[DRY-RUN] link/copy $Src -> $Dst"; return }
     try {
@@ -50,10 +71,18 @@ function Sync-SkillFolder {
     $item = Get-Item -LiteralPath $dst -Force -ErrorAction SilentlyContinue
     if ($item) {
         if ($item.Attributes -band [System.IO.FileAttributes]::ReparsePoint) {
-            Write-Host "[SKIP] Preserving existing link: $dst"
-            return
-        }
-        if (-not (Test-Path -LiteralPath $marker) -or (Get-Content -LiteralPath $marker -Raw).Trim() -ne $SrcDir) {
+            $targets = @($item.Target)
+            if ($targets -contains $SrcDir) {
+                return
+            }
+            if (-not $Force) {
+                Write-Host "[SKIP] Preserving existing link: $dst"
+                return
+            }
+            Write-Host "[RELINK] $dst -> $SrcDir"
+            if (-not $DryRun) { Remove-Item -LiteralPath $dst -Force }
+            $item = $null
+        } elseif (-not (Test-Path -LiteralPath $marker) -or (Get-Content -LiteralPath $marker -Raw).Trim() -ne $SrcDir) {
             Write-Host "[SKIP] Preserving existing skill: $dst"
             return
         }
@@ -100,19 +129,33 @@ if (Test-Path -LiteralPath $RepoSkills) {
 }
 
 $UserHome = $env:USERPROFILE
-Sync-File -Src $TargetMd -Dst (Join-Path $UserHome ".codex\AGENTS.md")
-Sync-File -Src $TargetMd -Dst (Join-Path $UserHome ".claude\CLAUDE.md")
-Sync-File -Src $TargetMd -Dst (Join-Path $UserHome "AppData\Roaming\opencode\AGENTS.md")
-Sync-File -Src $TargetMd -Dst (Join-Path $UserHome ".config\opencode\AGENTS.md")
-Sync-File -Src $TargetMd -Dst (Join-Path $UserHome ".omo\agent\AGENTS.md")
-Sync-File -Src $TargetMd -Dst (Join-Path $UserHome ".omp\agent\AGENTS.md")
-Sync-File -Src $TargetMd -Dst (Join-Path $UserHome ".gemini\GEMINI.md")
-
-Sync-TargetSkills -TargetDir (Join-Path $UserHome ".claude\skills")
-Sync-TargetSkills -TargetDir (Join-Path $UserHome ".config\opencode\skills")
-Sync-TargetSkills -TargetDir (Join-Path $UserHome ".omo\agent\skills")
-Sync-TargetSkills -TargetDir (Join-Path $UserHome ".omp\agent\skills")
-Sync-TargetSkills -TargetDir (Join-Path $UserHome ".gemini\skills")
+if (Should-SyncTarget -CheckDir (Join-Path $UserHome ".codex") -BinName "codex") {
+    Sync-File -Src $TargetMd -Dst (Join-Path $UserHome ".codex\AGENTS.md")
+}
+if (Should-SyncTarget -CheckDir (Join-Path $UserHome ".claude") -BinName "claude") {
+    Sync-File -Src $TargetMd -Dst (Join-Path $UserHome ".claude\CLAUDE.md")
+    Sync-TargetSkills -TargetDir (Join-Path $UserHome ".claude\skills")
+}
+if ((Should-SyncTarget -CheckDir (Join-Path $UserHome "AppData\Roaming\opencode") -BinName "opencode") -or (Should-SyncTarget -CheckDir (Join-Path $UserHome ".config\opencode") -BinName "opencode")) {
+    Sync-File -Src $TargetMd -Dst (Join-Path $UserHome "AppData\Roaming\opencode\AGENTS.md")
+    Sync-File -Src $TargetMd -Dst (Join-Path $UserHome ".config\opencode\AGENTS.md")
+    Sync-TargetSkills -TargetDir (Join-Path $UserHome ".config\opencode\skills")
+}
+if (Should-SyncTarget -CheckDir (Join-Path $UserHome ".omo") -BinName "omo") {
+    Sync-File -Src $TargetMd -Dst (Join-Path $UserHome ".omo\agent\AGENTS.md")
+    Sync-TargetSkills -TargetDir (Join-Path $UserHome ".omo\agent\skills")
+}
+if (Should-SyncTarget -CheckDir (Join-Path $UserHome ".omp") -BinName "omp") {
+    Sync-File -Src $TargetMd -Dst (Join-Path $UserHome ".omp\agent\AGENTS.md")
+    Sync-TargetSkills -TargetDir (Join-Path $UserHome ".omp\agent\skills")
+}
+if (Should-SyncTarget -CheckDir (Join-Path $UserHome ".gemini") -BinName "gemini") {
+    Sync-File -Src $TargetMd -Dst (Join-Path $UserHome ".gemini\GEMINI.md")
+    Sync-TargetSkills -TargetDir (Join-Path $UserHome ".gemini\skills")
+}
+if (Should-SyncTarget -CheckDir (Join-Path $UserHome ".hermes") -BinName "hermes") {
+    Sync-TargetSkills -TargetDir (Join-Path $UserHome ".hermes\skills")
+}
 
 if (Test-Path -LiteralPath (Join-Path $UserHome ".cursor")) {
     Sync-File -Src $TargetMd -Dst (Join-Path $UserHome ".cursor\rules\global.mdc")
@@ -135,7 +178,7 @@ if ((Test-Path -LiteralPath $ClineDocs) -or (Test-Path -LiteralPath (Join-Path $
     Sync-TargetSkills -TargetDir (Join-Path $UserHome ".cline\skills")
 }
 
-if (Test-Path -LiteralPath (Join-Path $UserHome ".copilot")) {
+if ((Test-Path -LiteralPath (Join-Path $UserHome ".copilot")) -or (Get-Command "copilot" -ErrorAction SilentlyContinue)) {
     Sync-File -Src $TargetMd -Dst (Join-Path $UserHome ".copilot\copilot-instructions.md")
     Sync-TargetSkills -TargetDir (Join-Path $UserHome ".copilot\skills")
 }

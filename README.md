@@ -21,12 +21,13 @@
 
 | Agent / IDE | Global Instruction Target | Global Skills Target | Distribution Strategy |
 | :--- | :--- | :--- | :--- |
-| **Codex CLI** | `~/.codex/AGENTS.md` | `~/.agents/skills/` (Native) | File link + Native scan |
-| **Claude Code** | `~/.claude/CLAUDE.md` | `~/.claude/skills/<skill>` | File link + Item-level link |
-| **OpenCode** | `~/.config/opencode/AGENTS.md` | `~/.config/opencode/skills/<skill>` | File link + Item-level link |
-| **Oh My OpenAgent (`OmO`)** | `~/.omo/agent/AGENTS.md` | `~/.omo/agent/skills/<skill>` | File link + Item-level link |
-| **Oh My Pi (`omp`)** | `~/.omp/agent/AGENTS.md` | `~/.omp/agent/skills/<skill>` | File link + Item-level link |
-| **Antigravity (`agy`) / Gemini CLI** | `~/.gemini/GEMINI.md` | `~/.gemini/skills/<skill>` | File link + Item-level link |
+| **Codex CLI** *(Auto-detected)* | `~/.codex/AGENTS.md` | `~/.agents/skills/` (Native) | File link + Native scan |
+| **Claude Code** *(Auto-detected)* | `~/.claude/CLAUDE.md` | `~/.claude/skills/<skill>` | File link + Item-level link |
+| **OpenCode** *(Auto-detected)* | `~/.config/opencode/AGENTS.md` | `~/.config/opencode/skills/<skill>` | File link + Item-level link |
+| **Oh My OpenAgent (`OmO`)** *(Auto-detected)* | `~/.omo/agent/AGENTS.md` | `~/.omo/agent/skills/<skill>` | File link + Item-level link |
+| **Oh My Pi (`omp`)** *(Auto-detected)* | `~/.omp/agent/AGENTS.md` (+ `~/.agents/AGENTS.md` native) | `~/.omp/agent/skills/<skill>` (+ `~/.agents/skills/` native) | File link + Item-level link |
+| **Hermes Agent** *(Auto-detected)* | `skills.external_dirs` / `agent.environment_hint` | `~/.agents/skills/` (`external_dirs`) or `~/.hermes/skills/<skill>` | Native `external_dirs` or Item-level link |
+| **Antigravity (`agy`) / Gemini CLI** *(Auto-detected)* | `~/.gemini/GEMINI.md` | `~/.gemini/skills/<skill>` | File link + Item-level link |
 | **Cursor** *(Auto-detected)* | `~/.cursor/rules/global.mdc` | `~/.cursor/skills/<skill>` | File link + Item-level link |
 | **Windsurf** *(Auto-detected)* | `~/.codeium/windsurf/memories/global_rules.md` | `~/.codeium/windsurf/skills/<skill>` | File link + Item-level link |
 | **Roo Code / Cline** *(Auto-detected)* | `~/.roo/rules/global.md` / `~/Documents/Cline/Rules/global.md` | `~/.roo/skills/<skill>` / `~/.cline/skills/<skill>` | File link + Item-level link |
@@ -94,7 +95,7 @@ agent-ssot/
 
 ## Recommended Companion Tooling
 
-- **Code Search & Navigation:** `ripgrep` (`rg`), `fd`, `ast-grep` (`sg`), `codegraph` (MCP)
+- **Code Search & Navigation:** `ripgrep` (`rg`), `fd`, `ast-grep` (invoke as `ast-grep`, never `sg` on Linux due to `/usr/bin/sg`), `codegraph` (MCP)
 - **Diff, Tree & Disk Inspection:** `delta`, `difftastic` (`difft`), `eza`, `dust`, `bat`
 - **Shell Output Compression:** `rtk`
 

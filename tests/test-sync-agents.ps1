@@ -23,10 +23,10 @@ try {
     $PrivateTarget = Join-Path $Profile '.claude\skills\systematic-debugging'
     New-Item -ItemType Directory -Path $PrivateTarget -Force | Out-Null
     Set-Content (Join-Path $PrivateTarget 'private.txt') 'private'
-    & (Join-Path $Root 'scripts\sync-agents.ps1') | Out-Null
+    & (Join-Path $Root 'scripts\sync-agents.ps1') -All | Out-Null
     Assert (Test-Path (Join-Path $FirstTarget 'SKILL.md')) 'Copy fallback did not create skill contents.'
     Set-Content (Join-Path $First 'SKILL.md') 'updated source'
-    & (Join-Path $Root 'scripts\sync-agents.ps1') | Out-Null
+    & (Join-Path $Root 'scripts\sync-agents.ps1') -All | Out-Null
     Assert ((Get-Content (Join-Path $FirstTarget 'SKILL.md') -Raw).Trim() -eq 'updated source') 'Managed copy was not updated.'
     $Downstream = Join-Path $Profile '.omp\agent\skills\systematic-debugging\SKILL.md'
     Assert ((Get-Content $Downstream -Raw).Trim() -eq 'updated source') 'Downstream copy was not updated.'

@@ -11,7 +11,7 @@ Follow a strict **Graph → Paths → Slices** funnel to minimize context consum
 When executing shell commands for exploration or inspection, prefer modern Rust equivalents over legacy GNU tools (`find`, `grep`, `tree`, `du`, `diff`) with bounded output:
 - **File Discovery (`find` -> `fd`):** `fd -e <ext> <pattern>` or `fd -t f <name>` (respects `.gitignore` automatically).
 - **Text Search (`grep` -> `rg`):** Always cap output: `rg -n --max-count 20 "<pattern>" <path>` or `rg -l "<pattern>"`.
-- **AST / Structural Search:** Use `ast-grep` (`sg`) for function signatures, call sites, and syntax-aware refactoring instead of fragile regexes: `ast-grep --pattern '<pattern>' --lang <lang>`.
+- **AST / Structural Search:** Use `ast-grep` (always invoke as `ast-grep`, **never** `sg` — `/usr/bin/sg` on Linux is the POSIX group-switching utility) for function signatures, call sites, and syntax-aware refactoring instead of fragile regexes: `ast-grep --pattern '<pattern>' --lang <lang>`.
 - **Directory & Disk (`tree`/`du` -> `eza`/`dust`):** `eza --tree --level=2 --git-ignore --icons=never` and `dust -d 2`.
 - **Syntax Diff (`diff` -> `difft`/`delta`):** Prefer `difft` or `git diff` for reviewing structural changes.
 - **Clean Fallback:** If a Rust binary is unavailable (`command -v <tool>` fails) in a minimal container or remote host, fall back immediately to standard POSIX tools with `--exclude-dir={.git,node_modules,vendor}` without retrying the missing binary.
