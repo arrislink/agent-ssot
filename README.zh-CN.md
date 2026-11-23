@@ -40,6 +40,4 @@ cd agent-ssot
 
 如果技能目录本身是符号链接，脚本会保留并跳过它；请检查 `[SKIP]` 输出。Windows 无法创建 junction 时会创建受管理副本，后续同步会更新源文件，但不会自动删除源中已移除的文件。指令文件复制回退后，每次更新会先备份旧副本。
 
-各工具对规则及技能路径的实际发现行为可能随版本变化，尚未对所有产品逐一验证。隔离测试：macOS/Linux 执行 `bash tests/test-sync-agents.sh`，Windows 执行 `pwsh -File tests/test-sync-agents.ps1`。
-
-2026-11-19 验证记录：在 macOS 上执行 `/bin/bash -n scripts/sync-agents.sh` 和 `/bin/bash tests/test-sync-agents.sh` 均通过。本机没有 `pwsh`，PowerShell 测试未运行；已添加 CI 工作流，但尚未验证其运行结果。
+各工具对规则及技能路径的实际发现行为可能随版本变化，尚未对所有产品逐一验证。隔离测试：macOS/Linux 执行 `bash tests/test-sync-agents.sh`，Windows 执行 `pwsh -File tests/test-sync-agents.ps1`，GitHub Actions CI 在 Ubuntu、macOS、Windows 三端自动执行回归验证。

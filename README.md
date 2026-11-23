@@ -67,9 +67,7 @@ Preview changes first with `-DryRun`, then execute:
 
 An existing skills-directory symlink is preserved and skipped rather than migrated. Inspect `[SKIP]` messages to identify integrations that were not updated. The mappings above describe intended locations; actual discovery varies by agent and version and has not been independently verified for every product.
 
-Run the isolated regression checks with `bash tests/test-sync-agents.sh` on macOS/Linux or `pwsh -File tests/test-sync-agents.ps1` on Windows. CI runs these checks on all three platforms.
-
-Verification on 2026-11-19: `/bin/bash -n scripts/sync-agents.sh` and `/bin/bash tests/test-sync-agents.sh` passed on macOS. The PowerShell tests were not run locally because `pwsh` was unavailable; the CI workflow has been added but its results have not been verified.
+Run the isolated regression checks with `bash tests/test-sync-agents.sh` on macOS/Linux or `pwsh -File tests/test-sync-agents.ps1` on Windows. GitHub Actions CI verifies these checks across Ubuntu, macOS, and Windows.
 
 ---
 

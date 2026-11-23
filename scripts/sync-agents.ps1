@@ -1,7 +1,8 @@
 param(
     [switch]$DryRun,
     [switch]$All,
-    [switch]$Force
+    [switch]$Force,
+    [switch]$Prune
 )
 
 $ErrorActionPreference = "Stop"
@@ -19,7 +20,7 @@ function Ensure-Dir {
     param([string]$Path)
     if (-not (Test-Path -LiteralPath $Path)) {
         if ($DryRun) {
-            Write-Host "[DRY-RUN] mkdir $Path"
+            Write-Output "[DRY-RUN] mkdir $Path"
         } else {
             New-Item -ItemType Directory -Force -Path $Path | Out-Null
         }
@@ -34,29 +35,73 @@ function Should-SyncTarget {
     return $false
 }
 
+function Test-ReparseTargetMatch {
+    param($Item, [string]$Expected)
+    $normExpected = $Expected.TrimEnd('\', '/')
+    foreach ($t in @($Item.Target)) {
+        if ($null -ne $t -and ([string]$t).TrimEnd('\', '/') -eq $normExpected) {
+            return $true
+        }
+    }
+    return $false
+}
+
+function Remove-BrokenLinks {
+    param([string]$Dir)
+    $dirItem = Get-Item -LiteralPath $Dir -Force -ErrorAction SilentlyContinue
+    if (-not $dirItem -or ($dirItem.Attributes -band [System.IO.FileAttributes]::ReparsePoint)) {
+        return
+    }
+    Get-ChildItem -LiteralPath $Dir -Force -ErrorAction SilentlyContinue | ForEach-Object {
+        $entry = $_
+        if (-not ($entry.Attributes -band [System.IO.FileAttributes]::ReparsePoint)) {
+            return
+        }
+        $targets = @($entry.Target)
+        if ($targets.Count -eq 0 -or [string]::IsNullOrEmpty([string]$targets[0])) {
+            return
+        }
+        $rawTarget = [string]$targets[0]
+        $resolved = if ([IO.Path]::IsPathRooted($rawTarget)) {
+            $rawTarget
+        } else {
+            Join-Path (Split-Path -Parent $entry.FullName) $rawTarget
+        }
+        if (-not ([System.IO.File]::Exists($resolved) -or [System.IO.Directory]::Exists($resolved))) {
+            Write-Output "[PRUNE] Removing broken link: $($entry.FullName)"
+            if (-not $DryRun) {
+                $entry.Delete()
+            }
+        }
+    }
+}
+
 function Sync-File {
     param([string]$Src, [string]$Dst)
     Ensure-Dir (Split-Path -Parent $Dst)
     $item = Get-Item -LiteralPath $Dst -Force -ErrorAction SilentlyContinue
     if ($item) {
         if ($item.Attributes -band [System.IO.FileAttributes]::ReparsePoint) {
-            $targets = @($item.Target)
-            if ($targets -contains $Src) {
+            if (Test-ReparseTargetMatch -Item $item -Expected $Src) {
                 return
             }
             if (-not $Force) {
-                Write-Host "[SKIP] Preserving existing link: $Dst"
+                Write-Output "[SKIP] Preserving existing link: $Dst"
                 return
             }
-            Write-Host "[RELINK] $Dst -> $Src"
-            if (-not $DryRun) { Remove-Item -LiteralPath $Dst -Force }
+            Write-Output "[RELINK] $Dst -> $Src"
+            if (-not $DryRun) { $item.Delete() }
         } else {
             $bak = "$Dst.bak.$(Get-Date -Format 'yyyyMMddHHmmssfff')"
-            Write-Host "[BACKUP] $Dst -> $bak"
+            while (Test-Path -LiteralPath $bak) {
+                Start-Sleep -Milliseconds 2
+                $bak = "$Dst.bak.$(Get-Date -Format 'yyyyMMddHHmmssfff')"
+            }
+            Write-Output "[BACKUP] $Dst -> $bak"
             if (-not $DryRun) { Move-Item -LiteralPath $Dst -Destination $bak }
         }
     }
-    if ($DryRun) { Write-Host "[DRY-RUN] link/copy $Src -> $Dst"; return }
+    if ($DryRun) { Write-Output "[DRY-RUN] link/copy $Src -> $Dst"; return }
     try {
         if ($env:SYNC_AGENTS_TEST_COPY_FALLBACK -eq '1') { throw 'Copy fallback requested' }
         New-Item -ItemType SymbolicLink -Path $Dst -Target $Src -ErrorAction Stop | Out-Null
@@ -71,23 +116,22 @@ function Sync-SkillFolder {
     $item = Get-Item -LiteralPath $dst -Force -ErrorAction SilentlyContinue
     if ($item) {
         if ($item.Attributes -band [System.IO.FileAttributes]::ReparsePoint) {
-            $targets = @($item.Target)
-            if ($targets -contains $SrcDir) {
+            if (Test-ReparseTargetMatch -Item $item -Expected $SrcDir) {
                 return
             }
             if (-not $Force) {
-                Write-Host "[SKIP] Preserving existing link: $dst"
+                Write-Output "[SKIP] Preserving existing link: $dst"
                 return
             }
-            Write-Host "[RELINK] $dst -> $SrcDir"
-            if (-not $DryRun) { Remove-Item -LiteralPath $dst -Force }
+            Write-Output "[RELINK] $dst -> $SrcDir"
+            if (-not $DryRun) { $item.Delete() }
             $item = $null
         } elseif (-not (Test-Path -LiteralPath $marker) -or (Get-Content -LiteralPath $marker -Raw).Trim() -ne $SrcDir) {
-            Write-Host "[SKIP] Preserving existing skill: $dst"
+            Write-Output "[SKIP] Preserving existing skill: $dst"
             return
         }
     }
-    if ($DryRun) { Write-Host "[DRY-RUN] link/copy dir $SrcDir -> $dst"; return }
+    if ($DryRun) { Write-Output "[DRY-RUN] link/copy dir $SrcDir -> $dst"; return }
     if ($item) {
         Copy-Item -Path (Join-Path $SrcDir '*') -Destination $dst -Recurse -Force
         return
@@ -105,10 +149,13 @@ function Sync-TargetSkills {
     param([string]$TargetDir)
     $item = Get-Item -LiteralPath $TargetDir -Force -ErrorAction SilentlyContinue
     if ($item -and ($item.Attributes -band [System.IO.FileAttributes]::ReparsePoint)) {
-        Write-Host "[SKIP] Preserving skills directory link: $TargetDir"
+        Write-Output "[SKIP] Preserving skills directory link: $TargetDir"
         return
     }
     Ensure-Dir $TargetDir
+    if ($Prune) {
+        Remove-BrokenLinks -Dir $TargetDir
+    }
     $names = @{}
     if (Test-Path -LiteralPath $TargetSkills) {
         Get-ChildItem -LiteralPath $TargetSkills -Directory | ForEach-Object { $names[$_.Name] = $true }
@@ -126,6 +173,10 @@ if (Test-Path -LiteralPath $RepoSkills) {
     Get-ChildItem -LiteralPath $RepoSkills -Directory | ForEach-Object {
         Sync-SkillFolder -SrcDir $_.FullName -DstDir $TargetSkills
     }
+}
+
+if ($Prune) {
+    Remove-BrokenLinks -Dir $TargetSkills
 }
 
 $UserHome = $env:USERPROFILE
@@ -154,7 +205,13 @@ if (Should-SyncTarget -CheckDir (Join-Path $UserHome ".gemini") -BinName "gemini
     Sync-TargetSkills -TargetDir (Join-Path $UserHome ".gemini\skills")
 }
 if (Should-SyncTarget -CheckDir (Join-Path $UserHome ".hermes") -BinName "hermes") {
-    Sync-TargetSkills -TargetDir (Join-Path $UserHome ".hermes\skills")
+    $hermesCfg = Join-Path $UserHome ".hermes\config.yaml"
+    $hermesRaw = if (Test-Path -LiteralPath $hermesCfg) { Get-Content -LiteralPath $hermesCfg -Raw } else { "" }
+    if ($hermesRaw -and ($hermesRaw.Contains($TargetSkills) -or $hermesRaw.Contains($TargetSkills.Replace('\', '/')))) {
+        Write-Output "[OK] Hermes external_dirs already includes $TargetSkills"
+    } else {
+        Sync-TargetSkills -TargetDir (Join-Path $UserHome ".hermes\skills")
+    }
 }
 
 if (Test-Path -LiteralPath (Join-Path $UserHome ".cursor")) {
@@ -183,4 +240,4 @@ if ((Test-Path -LiteralPath (Join-Path $UserHome ".copilot")) -or (Get-Command "
     Sync-TargetSkills -TargetDir (Join-Path $UserHome ".copilot\skills")
 }
 
-Write-Host "Done: Windows global AGENTS.md and shared skills synced."
+Write-Output "Done: Windows global AGENTS.md and shared skills synced."
