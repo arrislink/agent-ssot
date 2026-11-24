@@ -15,6 +15,8 @@
 3. **Conservative Item-Level Distribution:** Preserves existing skills directories and unrelated links, including dangling links. Conflicting entries are skipped; existing instruction files are backed up before linking.
 4. **Orchestration Neutrality:** Avoids hardcoding vendor-specific tool primitives or conflicting multi-agent schedulers so host orchestrators (`OmO`, `omp`, `agy`, Claude Code, Codex CLI) retain native routing control.
 
+> **Smart On-Demand Sync & Health Check:** By default, scripts only wire targets whose configuration directory or CLI binary is already present, avoiding ghost dotfiles for uninstalled tools. Pass `--all` (`-All` on Windows) to pre-seed all core CLI targets, `--force` (`-Force`) to repoint links after moving the repository, `--prune` (`-Prune`) to remove broken skill links, and `--check` (`-Check`) to run a read-only audit of SSOT links and companion CLI tools (returning non-zero on missing or broken SSOT wiring).
+
 ---
 
 ## Supported Agents & Target Mappings
@@ -46,28 +48,30 @@ cd agent-ssot
 
 ### 2. Sync on macOS / Linux
 
-Preview changes first with `--dry-run`, then execute:
+Preview changes first with `--dry-run`, execute sync, and verify health with `--check`:
 
 ```bash
 chmod +x scripts/sync-agents.sh
 ./scripts/sync-agents.sh --dry-run
 ./scripts/sync-agents.sh
+./scripts/sync-agents.sh --check
 ```
 
 ### 3. Sync on Windows (PowerShell)
 
-Preview changes first with `-DryRun`, then execute:
+Preview changes first with `-DryRun`, execute sync, and verify health with `-Check`:
 
 ```powershell
 .\scripts\sync-agents.ps1 -DryRun
 .\scripts\sync-agents.ps1
+.\scripts\sync-agents.ps1 -Check
 ```
 
 > **Windows:** Enable Developer Mode (or run PowerShell as Administrator) for links. When a junction cannot be created, a managed copy is refreshed on subsequent runs; files removed upstream are not automatically deleted from that copy. Existing unmarked directories and links are preserved. File-copy fallback creates a backup before each subsequent instruction-file refresh.
 
 An existing skills-directory symlink is preserved and skipped rather than migrated. Inspect `[SKIP]` messages to identify integrations that were not updated. The mappings above describe intended locations; actual discovery varies by agent and version and has not been independently verified for every product.
 
-Run the isolated regression checks with `bash tests/test-sync-agents.sh` on macOS/Linux or `pwsh -File tests/test-sync-agents.ps1` on Windows. GitHub Actions CI verifies these checks across Ubuntu, macOS, and Windows.
+Run the isolated regression checks with `bash tests/test-sync-agents.sh` on macOS/Linux or `pwsh -File tests/test-sync-agents.ps1` on Windows. GitHub Actions CI verifies syntax, static analysis, and regression tests across Ubuntu, macOS, and Windows.
 
 ---
 
@@ -83,8 +87,11 @@ agent-ssot/
 │   └── verification-before-completion/
 │       └── SKILL.md
 ├── scripts/
-│   ├── sync-agents.sh            # macOS / Linux sync script
-│   └── sync-agents.ps1           # Windows PowerShell sync script
+│   ├── sync-agents.sh            # macOS / Linux sync & check script
+│   └── sync-agents.ps1           # Windows PowerShell sync & check script
+├── tests/
+│   ├── test-sync-agents.sh       # Unix regression tests
+│   └── test-sync-agents.ps1      # Windows regression tests
 ├── README.md
 └── README.zh-CN.md
 ```

@@ -15,7 +15,7 @@
 3. **保守的条目级分发：** 保留已有技能目录及非本项目链接（包括悬空链接）；遇到冲突时跳过，已有普通指令文件在替换前备份。
 4. **编排器中性：** 不在公共规范中硬编码单一厂商的私有工具原语或调度逻辑，避免与 Hermes Agent、`omp`、`OmO`、`agy`、Claude Code、Codex CLI 的原生编排机制冲突。
 
-> **智能按需分发：** 默认仅向本机已存在配置目录或已安装 CLI 二进制的目标分发，避免为未安装或已卸载工具残留幽灵目录；传入 `--all`（Windows `-All`）可强制预置全部目标，`--force` 可在仓库迁移后重指符号链接，`--prune` 可清理失效悬空技能链接。Linux 下请始终使用 `ast-grep` 全名调用（切勿使用 `sg`，因 `/usr/bin/sg` 为系统用户组切换命令）。
+> **智能按需分发与状态体检：** 默认仅向本机已存在配置目录或已安装 CLI 二进制的目标分发，避免为未安装或已卸载工具残留幽灵目录；传入 `--all`（Windows `-All`）可强制预置全部目标，`--force`（`-Force`）可在仓库迁移后重指符号链接，`--prune`（`-Prune`）可清理失效悬空技能链接，`--check`（`-Check`）可只读巡检 SSOT 软链状态与伴生 CLI 工具健康度（存在缺失或断链时返回非 0 退出码）。Linux 下请始终使用 `ast-grep` 全名调用（切勿使用 `sg`，因 `/usr/bin/sg` 为系统用户组切换命令）。
 
 ---
 
@@ -28,6 +28,7 @@ cd agent-ssot
 chmod +x scripts/sync-agents.sh
 ./scripts/sync-agents.sh --dry-run
 ./scripts/sync-agents.sh
+./scripts/sync-agents.sh --check
 ```
 
 ### Windows (PowerShell)
@@ -36,8 +37,9 @@ git clone https://github.com/arrislink/agent-ssot.git
 cd agent-ssot
 .\scripts\sync-agents.ps1 -DryRun
 .\scripts\sync-agents.ps1
+.\scripts\sync-agents.ps1 -Check
 ```
 
 如果技能目录本身是符号链接，脚本会保留并跳过它；请检查 `[SKIP]` 输出。Windows 无法创建 junction 时会创建受管理副本，后续同步会更新源文件，但不会自动删除源中已移除的文件。指令文件复制回退后，每次更新会先备份旧副本。
 
-各工具对规则及技能路径的实际发现行为可能随版本变化，尚未对所有产品逐一验证。隔离测试：macOS/Linux 执行 `bash tests/test-sync-agents.sh`，Windows 执行 `pwsh -File tests/test-sync-agents.ps1`，GitHub Actions CI 在 Ubuntu、macOS、Windows 三端自动执行回归验证。
+各工具对规则及技能路径的实际发现行为可能随版本变化，尚未对所有产品逐一验证。隔离测试：macOS/Linux 执行 `bash tests/test-sync-agents.sh`，Windows 执行 `pwsh -File tests/test-sync-agents.ps1`，GitHub Actions CI 在 Ubuntu、macOS、Windows 三端自动执行语法检查、静态分析与回归验证。

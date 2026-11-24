@@ -4,20 +4,49 @@ on:
   push:
   pull_request:
 
+permissions:
+  contents: read
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
 jobs:
   unix:
+    timeout-minutes: 10
     strategy:
       matrix:
         os: [ubuntu-latest, macos-latest]
     runs-on: ${{ matrix.os }}
     steps:
       - uses: actions/checkout@v7
+      - name: Check Bash syntax
+        run: bash -n scripts/sync-agents.sh tests/test-sync-agents.sh
+      - name: Lint with ShellCheck
+        if: runner.os == 'Linux'
+        run: shellcheck scripts/sync-agents.sh tests/test-sync-agents.sh
       - name: Test sync
         run: bash tests/test-sync-agents.sh
+
   windows:
+    timeout-minutes: 10
     runs-on: windows-latest
     steps:
       - uses: actions/checkout@v7
+      - name: Check PowerShell syntax
+        shell: pwsh
+        run: |
+          $failed = $false
+          foreach ($file in @('scripts/sync-agents.ps1', 'tests/test-sync-agents.ps1')) {
+            $tokens = $null
+            $errors = $null
+            [System.Management.Automation.Language.Parser]::ParseFile((Resolve-Path $file), [ref]$tokens, [ref]$errors) | Out-Null
+            if ($errors.Count -gt 0) {
+              $errors | ForEach-Object { Write-Error $_.ToString() }
+              $failed = $true
+            }
+          }
+          if ($failed) { exit 1 }
       - name: Test sync
         shell: pwsh
         run: ./tests/test-sync-agents.ps1
