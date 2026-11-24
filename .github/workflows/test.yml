@@ -40,7 +40,7 @@ jobs:
           foreach ($file in @('scripts/sync-agents.ps1', 'tests/test-sync-agents.ps1')) {
             $tokens = $null
             $errors = $null
-            [System.Management.Automation.Language.Parser]::ParseFile((Resolve-Path $file), [ref]$tokens, [ref]$errors) | Out-Null
+            [System.Management.Automation.Language.Parser]::ParseFile((Resolve-Path -LiteralPath $file).ProviderPath, [ref]$tokens, [ref]$errors) | Out-Null
             if ($errors.Count -gt 0) {
               $errors | ForEach-Object { Write-Error $_.ToString() }
               $failed = $true

@@ -142,5 +142,15 @@ ln -s "$TMP_ROOT/missing-skill-target" "$TMP_ROOT/smart-home/.omp/agent/skills/b
 if PATH="/usr/bin:/bin" HOME="$TMP_ROOT/smart-home" bash "$SYNC_SCRIPT" --check >/dev/null 2>&1; then
   fail "--check should return non-zero when broken symlink exists"
 fi
+rm -f "$TMP_ROOT/smart-home/.omp/agent/skills/broken-link"
+
+# Broken downstream link shadowed by a non-directory file in ~/.agents/skills must still fail --check
+printf 'not a skill dir\n' > "$TMP_ROOT/smart-home/.agents/skills/shadowed-non-dir"
+ln -s "$TMP_ROOT/missing-skill-target" "$TMP_ROOT/smart-home/.omp/agent/skills/shadowed-non-dir"
+if PATH="/usr/bin:/bin" HOME="$TMP_ROOT/smart-home" bash "$SYNC_SCRIPT" --check >/dev/null 2>&1; then
+  fail "--check should return non-zero when downstream broken symlink shares name with non-directory SSOT file"
+fi
+rm -f "$TMP_ROOT/smart-home/.omp/agent/skills/shadowed-non-dir" "$TMP_ROOT/smart-home/.agents/skills/shadowed-non-dir"
+PATH="/usr/bin:/bin" HOME="$TMP_ROOT/smart-home" bash "$SYNC_SCRIPT" --check >/dev/null
 
 echo 'PASS: sync-agents safety, smart-detection, force, prune, backup, Hermes, and --check tests'

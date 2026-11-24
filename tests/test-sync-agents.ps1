@@ -146,6 +146,46 @@ try {
                 $global:LASTEXITCODE = 0
                 & $SyncScript -Check | Out-Null
                 Assert ($LASTEXITCODE -eq 0) '-Check should pass after -Force -Prune.'
+
+                # Shadowed broken link: plain file in .agents\skills with broken link in downstream target
+                $ShadowTransient = Join-Path $Temp 'shadow-transient-target'
+                New-Item -ItemType Directory -Path $ShadowTransient -Force | Out-Null
+                $PlainSsot = Join-Path $LinkProfile '.agents\skills\plain-non-dir'
+                Set-Content -LiteralPath $PlainSsot -Value 'not a skill dir'
+                $ShadowBroken = Join-Path $LinkProfile '.claude\skills\plain-non-dir'
+                New-Item -ItemType Junction -Path $ShadowBroken -Target $ShadowTransient -ErrorAction Stop | Out-Null
+                Remove-Item -LiteralPath $ShadowTransient -Recurse -Force
+
+                $global:LASTEXITCODE = 0
+                $ShadowOut = & $SyncScript -Check *>&1 | Out-String
+                Assert ($LASTEXITCODE -ne 0) '-Check should fail when downstream broken link shares name with non-directory SSOT entry.'
+                Assert ($ShadowOut.Contains('[FAIL] Broken link in target skills:')) 'Expected target broken-link diagnostic when shadowed by non-directory SSOT entry.'
+
+                $ShadowBrokenItem = Get-Item -LiteralPath $ShadowBroken -Force -ErrorAction SilentlyContinue
+                if ($ShadowBrokenItem) { $ShadowBrokenItem.Delete() }
+                Remove-Item -LiteralPath $PlainSsot -Force -ErrorAction SilentlyContinue
+
+                # Shadowed SSOT broken link: plain file in repo skills\ with broken link in .agents\skills
+                $RepoTransient = Join-Path $Temp 'repo-transient-target'
+                New-Item -ItemType Directory -Path $RepoTransient -Force | Out-Null
+                $PlainRepoEntry = Join-Path $RepoSkills 'repo-plain-file'
+                Set-Content -LiteralPath $PlainRepoEntry -Value 'not a skill dir'
+                $SsotShadowBroken = Join-Path $LinkProfile '.agents\skills\repo-plain-file'
+                New-Item -ItemType Junction -Path $SsotShadowBroken -Target $RepoTransient -ErrorAction Stop | Out-Null
+                Remove-Item -LiteralPath $RepoTransient -Recurse -Force
+
+                $global:LASTEXITCODE = 0
+                $SsotShadowOut = & $SyncScript -Check *>&1 | Out-String
+                Assert ($LASTEXITCODE -ne 0) '-Check should fail when SSOT broken link shares name with non-directory repo entry.'
+                Assert ($SsotShadowOut.Contains('[FAIL] Broken link in SSOT skills:')) 'Expected SSOT broken-link diagnostic when shadowed by non-directory repo entry.'
+
+                $SsotShadowItem = Get-Item -LiteralPath $SsotShadowBroken -Force -ErrorAction SilentlyContinue
+                if ($SsotShadowItem) { $SsotShadowItem.Delete() }
+                Remove-Item -LiteralPath $PlainRepoEntry -Force -ErrorAction SilentlyContinue
+
+                $global:LASTEXITCODE = 0
+                & $SyncScript -Check | Out-Null
+                Assert ($LASTEXITCODE -eq 0) '-Check should pass after cleaning shadowed broken links.'
             }
         } finally {
             $env:PATH = $SavedPath

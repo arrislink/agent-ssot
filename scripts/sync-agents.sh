@@ -122,7 +122,8 @@ hermes_has_external_skills_dir() {
     return 1
   fi
   local target_norm=${TARGET_SKILLS%/}
-  local tilde_norm="~/.agents/skills"
+  local tilde_char='~'
+  local tilde_norm="${tilde_char}/.agents/skills"
   local line leading_ws code
   while IFS= read -r line || [ -n "$line" ]; do
     leading_ws=${line%%[![:space:]]*}

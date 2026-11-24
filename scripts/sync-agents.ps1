@@ -342,8 +342,9 @@ function Test-CheckTargetSkills {
 
     Get-ChildItem -LiteralPath $TargetDir -Force -ErrorAction SilentlyContinue | ForEach-Object {
         if (($_.Attributes -band [System.IO.FileAttributes]::ReparsePoint) -and -not (Test-ReparsePointValid $_)) {
-            $inSsot = Test-Path -LiteralPath (Join-Path $TargetSkills $_.Name)
-            if (-not $inSsot) {
+            $ssotCand = Get-Item -LiteralPath (Join-Path $TargetSkills $_.Name) -Force -ErrorAction SilentlyContinue
+            $inValidSsot = ($null -ne $ssotCand) -and $ssotCand.PSIsContainer -and (Test-ReparsePointValid $ssotCand)
+            if (-not $inValidSsot) {
                 Write-Output "[FAIL] Broken link in target skills: $($_.FullName)"
                 $Script:CheckFailures++
             }
@@ -498,7 +499,7 @@ if ($Check) {
 
         Get-ChildItem -LiteralPath $TargetSkills -Force -ErrorAction SilentlyContinue | ForEach-Object {
             if (($_.Attributes -band [System.IO.FileAttributes]::ReparsePoint) -and -not (Test-ReparsePointValid $_)) {
-                $inRepo = Test-Path -LiteralPath (Join-Path $RepoSkills $_.Name)
+                $inRepo = Test-Path -LiteralPath (Join-Path $RepoSkills $_.Name) -PathType Container
                 if (-not $inRepo) {
                     Write-Output "[FAIL] Broken link in SSOT skills: $($_.FullName)"
                     $Script:CheckFailures++
